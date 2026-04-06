@@ -1,6 +1,9 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { NextRequest } from 'next/server';
 
+// Increase Next.js route timeout (Vercel: max 300s on Pro, 60s on Hobby)
+export const maxDuration = 120;
+
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
@@ -117,7 +120,6 @@ Provide realistic estimates based on Hong Kong market data. Generate exactly 3-5
         const stream = anthropic.messages.stream({
           model: 'claude-opus-4-6',
           max_tokens: 8000,
-          thinking: { type: 'adaptive' } as unknown as Parameters<typeof anthropic.messages.stream>[0]['thinking'],
           system: systemPrompt,
           messages: [{ role: 'user', content: userPrompt }],
         });
