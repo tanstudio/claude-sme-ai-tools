@@ -100,9 +100,13 @@ export default function WebsiteAnalysisPage() {
         body: JSON.stringify({ url, competitors }),
       });
 
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error((errBody as { error?: string }).error || `HTTP ${res.status}`);
+      }
 
-      const reader = res.body!.getReader();
+      if (!res.body) throw new Error('無回應串流');
+      const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let accumulated = '';
 
@@ -112,6 +116,12 @@ export default function WebsiteAnalysisPage() {
         const chunk = decoder.decode(value);
         accumulated += chunk;
         setStreamText(accumulated);
+      }
+
+      if (accumulated.includes('__STREAM_ERROR__')) {
+        const errPart = accumulated.split('__STREAM_ERROR__')[1];
+        const errObj = JSON.parse(errPart) as { error: string };
+        throw new Error(errObj.error);
       }
 
       const jsonMatch = accumulated.match(/\{[\s\S]*\}/);
@@ -128,12 +138,18 @@ export default function WebsiteAnalysisPage() {
     }
   };
 
+  const [pdfExporting, setPdfExporting] = useState(false);
+
   const handleExportPDF = async () => {
+    if (pdfExporting) return;
+    setPdfExporting(true);
     try {
       const { exportToPDF } = await import('@/lib/pdf-export');
       await exportToPDF('website-report', `網站分析報告_${new Date().toISOString().slice(0, 10)}.pdf`);
     } catch {
       alert('PDF 匯出失敗，請重試');
+    } finally {
+      setPdfExporting(false);
     }
   };
 
@@ -174,10 +190,11 @@ export default function WebsiteAnalysisPage() {
           {result && (
             <button
               onClick={handleExportPDF}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm font-medium no-print"
+              disabled={pdfExporting}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors text-sm font-medium no-print"
             >
-              <Download size={16} />
-              匯出 PDF 報告
+              {pdfExporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+              {pdfExporting ? '匯出中...' : '匯出 PDF 報告'}
             </button>
           )}
         </div>
@@ -526,7 +543,7 @@ export default function WebsiteAnalysisPage() {
 
           {/* Report Footer */}
           <div className="p-4 bg-slate-50 rounded-b-xl text-center text-xs text-slate-400">
-            由 Claude Opus 4.6 生成 · Beta 版本 · {new Date().toLocaleString('zh-HK')}
+            由 Claude 3.5 Sonnet 生成 · Beta 版本 · {new Date().toLocaleString('zh-HK')}
           </div>
         </div>
       )}

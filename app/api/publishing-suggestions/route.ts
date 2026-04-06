@@ -8,7 +8,16 @@ const anthropic = new Anthropic({
 });
 
 export async function POST(req: NextRequest) {
-  const { content, contentType, platforms, targetAudience, industry, brandTone } = await req.json();
+  let body: { content?: string; contentType?: string; platforms?: string[]; targetAudience?: string; industry?: string; brandTone?: string };
+  try {
+    body = await req.json();
+  } catch {
+    return new Response(JSON.stringify({ error: '無效的請求格式' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+  const { content, contentType, platforms, targetAudience, industry, brandTone } = body;
 
   if (!content) {
     return new Response(JSON.stringify({ error: '請提供內容描述' }), {
@@ -126,7 +135,7 @@ Captions should be ready to copy-paste.`;
         controller.close();
       } catch (error) {
         const errMsg = error instanceof Error ? error.message : 'Unknown error';
-        controller.enqueue(encoder.encode(JSON.stringify({ error: errMsg })));
+        controller.enqueue(encoder.encode(`\n__STREAM_ERROR__${JSON.stringify({ error: errMsg })}`));
         controller.close();
       }
     },

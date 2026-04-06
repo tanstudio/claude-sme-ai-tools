@@ -8,7 +8,16 @@ const anthropic = new Anthropic({
 });
 
 export async function POST(req: NextRequest) {
-  const { url, competitors } = await req.json();
+  let body: { url?: string; competitors?: string };
+  try {
+    body = await req.json();
+  } catch {
+    return new Response(JSON.stringify({ error: '無效的請求格式' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+  const { url, competitors } = body;
 
   if (!url) {
     return new Response(JSON.stringify({ error: '請提供網站 URL' }), {
@@ -230,7 +239,7 @@ Provide realistic, specific analysis based on what you can infer about this type
         controller.close();
       } catch (error) {
         const errMsg = error instanceof Error ? error.message : 'Unknown error';
-        controller.enqueue(encoder.encode(JSON.stringify({ error: errMsg })));
+        controller.enqueue(encoder.encode(`\n__STREAM_ERROR__${JSON.stringify({ error: errMsg })}`));
         controller.close();
       }
     },

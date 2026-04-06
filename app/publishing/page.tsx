@@ -6,7 +6,7 @@ import {
 } from 'recharts';
 import {
   Send, Loader2, AlertCircle, Copy, Check, Clock, Hash,
-  TrendingUp, Target, Lightbulb, ChevronDown, ChevronUp
+  TrendingUp, Target, Lightbulb, ChevronDown, ChevronUp, ImageIcon
 } from 'lucide-react';
 import clsx from 'clsx';
 import type { PublishingRecommendationsResult, SocialPlatform, PlatformRecommendation } from '@/lib/types';
@@ -65,10 +65,34 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-function PlatformCard({ rec }: { rec: PlatformRecommendation }) {
+function PlatformCard({ rec, contentDescription }: { rec: PlatformRecommendation; contentDescription: string }) {
   const [expanded, setExpanded] = useState(true);
+  const [generatingImage, setGeneratingImage] = useState(false);
+  const [generatedImage, setGeneratedImage] = useState<string | null>(null);
+  const [imageError, setImageError] = useState('');
   const config = PLATFORM_CONFIG[rec.platform];
   if (!config) return null;
+
+  const handleGenerateImage = async () => {
+    setGeneratingImage(true);
+    setImageError('');
+    setGeneratedImage(null);
+    try {
+      const prompt = `${contentDescription}. Platform: ${config.label}. Style: ${rec.contentAdaptation}`;
+      const res = await fetch('/api/generate-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, platform: rec.platform }),
+      });
+      const data = await res.json() as { imageData?: string; mimeType?: string; error?: string };
+      if (!res.ok || data.error) throw new Error(data.error || '生成失敗');
+      setGeneratedImage(`data:${data.mimeType};base64,${data.imageData}`);
+    } catch (err) {
+      setImageError(err instanceof Error ? err.message : 'AI 生成圖片失敗');
+    } finally {
+      setGeneratingImage(false);
+    }
+  };
 
   return (
     <div className="border border-slate-200 rounded-xl overflow-hidden">
@@ -194,6 +218,48 @@ function PlatformCard({ rec }: { rec: PlatformRecommendation }) {
               </ul>
             </div>
           )}
+
+          {/* AI Image Generation */}
+          <div className="border-t border-slate-100 pt-3">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-1.5">
+                <ImageIcon size={13} className="text-slate-400" />
+                <span className="text-xs font-medium text-slate-600">Gemini AI 配圖生成</span>
+              </div>
+              <button
+                onClick={handleGenerateImage}
+                disabled={generatingImage}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                style={{ backgroundColor: `${config.color}15`, color: config.color }}
+              >
+                {generatingImage ? (
+                  <><Loader2 size={12} className="animate-spin" />生成中...</>
+                ) : (
+                  <><ImageIcon size={12} />生成配圖</>
+                )}
+              </button>
+            </div>
+            {imageError && (
+              <p className="text-xs text-red-500 mb-2">{imageError}</p>
+            )}
+            {generatedImage && (
+              <div className="relative">
+                <img
+                  src={generatedImage}
+                  alt={`${config.label} AI 生成配圖`}
+                  className="w-full rounded-lg border border-slate-200 object-cover"
+                  style={{ maxHeight: '300px' }}
+                />
+                <a
+                  href={generatedImage}
+                  download={`${config.label}_配圖.png`}
+                  className="absolute bottom-2 right-2 flex items-center gap-1 px-2 py-1 bg-black/60 text-white text-xs rounded-lg hover:bg-black/80 transition-colors"
+                >
+                  下載圖片
+                </a>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -242,9 +308,13 @@ export default function PublishingPage() {
         body: JSON.stringify({ content, contentType, platforms: selectedPlatforms, targetAudience, industry, brandTone }),
       });
 
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error((errBody as { error?: string }).error || `HTTP ${res.status}`);
+      }
 
-      const reader = res.body!.getReader();
+      if (!res.body) throw new Error('無回應串流');
+      const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let accumulated = '';
 
@@ -254,6 +324,12 @@ export default function PublishingPage() {
         const chunk = decoder.decode(value);
         accumulated += chunk;
         setStreamText(accumulated);
+      }
+
+      if (accumulated.includes('__STREAM_ERROR__')) {
+        const errPart = accumulated.split('__STREAM_ERROR__')[1];
+        const errObj = JSON.parse(errPart) as { error: string };
+        throw new Error(errObj.error);
       }
 
       const jsonMatch = accumulated.match(/\{[\s\S]*\}/);
@@ -482,7 +558,7 @@ export default function PublishingPage() {
             </div>
             <div className="space-y-4">
               {result.platforms.map((rec, i) => (
-                <PlatformCard key={i} rec={rec} />
+                <PlatformCard key={i} rec={rec} contentDescription={content} />
               ))}
             </div>
           </div>

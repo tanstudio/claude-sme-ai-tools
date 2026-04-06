@@ -8,7 +8,7 @@ export async function exportToPDF(elementId: string, filename: string): Promise<
 
   const element = document.getElementById(elementId);
   if (!element) {
-    throw new Error(`Element with id "${elementId}" not found`);
+    throw new Error(`找不到報告元素（id="${elementId}"）`);
   }
 
   const canvas = await html2canvas(element, {
@@ -25,24 +25,20 @@ export async function exportToPDF(elementId: string, filename: string): Promise<
 
   const pdfWidth = pdf.internal.pageSize.getWidth();
   const pdfHeight = pdf.internal.pageSize.getHeight();
-  const imgWidth = canvas.width;
-  const imgHeight = canvas.height;
+  const ratio = pdfWidth / canvas.width;
+  const scaledHeight = canvas.height * ratio;
 
-  const ratio = pdfWidth / imgWidth;
-  const scaledHeight = imgHeight * ratio;
+  // First page
+  pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, scaledHeight);
+  let heightLeft = scaledHeight - pdfHeight;
 
-  let heightLeft = scaledHeight;
-  let position = 0;
-  let page = 0;
-
+  // Additional pages
+  let position = -pdfHeight;
   while (heightLeft > 0) {
-    if (page > 0) {
-      pdf.addPage();
-    }
+    pdf.addPage();
     pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, scaledHeight);
     heightLeft -= pdfHeight;
     position -= pdfHeight;
-    page++;
   }
 
   pdf.save(filename);
