@@ -118,7 +118,7 @@ Provide realistic estimates based on Hong Kong market data. Generate exactly 3-5
     async start(controller) {
       try {
         const stream = anthropic.messages.stream({
-          model: 'claude-sonnet-4-6',
+          model: 'claude-3-5-sonnet-20241022',
           max_tokens: 8000,
           system: systemPrompt,
           messages: [{ role: 'user', content: userPrompt }],

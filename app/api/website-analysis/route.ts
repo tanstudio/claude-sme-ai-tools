@@ -212,7 +212,7 @@ Provide realistic, specific analysis based on what you can infer about this type
     async start(controller) {
       try {
         const stream = anthropic.messages.stream({
-          model: 'claude-sonnet-4-6',
+          model: 'claude-3-5-sonnet-20241022',
           max_tokens: 10000,
           system: systemPrompt,
           messages: [{ role: 'user', content: userPrompt }],
